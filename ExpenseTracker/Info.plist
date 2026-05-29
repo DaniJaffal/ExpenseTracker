@@ -2,9 +2,18 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>UIBackgroundModes</key>
+	<key>CFBundleURLTypes</key>
 	<array>
-		<string>remote-notification</string>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.danijaffal.ExpenseTracker</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>expensetracker</string>
+			</array>
+		</dict>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Attach a photo of a receipt to an expense or income.</string>
 </dict>
 </plist>

@@ -31,6 +31,16 @@ struct SettingsView: View {
 
     private var settings: AppSettings? { settingsList.first }
 
+    /// Marketing version + build number from Info.plist, shown as e.g.
+    /// "1.1 (2)". Both fields are wired to the project's MARKETING_VERSION
+    /// and CURRENT_PROJECT_VERSION build settings.
+    private var versionDisplay: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "1.1"
+        let build = info?["CFBundleVersion"] as? String ?? "1"
+        return "\(short) (\(build))"
+    }
+
     var body: some View {
         Form {
             Section("Exchange rate") {
@@ -186,7 +196,7 @@ struct SettingsView: View {
 
             Section("About") {
                 LabeledContent("App", value: "ExpenseTracker")
-                LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")
+                LabeledContent("Version", value: versionDisplay)
             }
 
             Section {

@@ -34,6 +34,13 @@ final class AppSettings {
     /// month that a budget crosses 80% or 100% of its cap.
     var notifyOnBudgetWarning: Bool = false
 
+    /// Day-of-month (1–31) the user gets paid. The Dashboard's "available
+    /// balance" line uses the next occurrence of this day as the cutoff for
+    /// summing committed (upcoming subscription + expected) spending.
+    /// nil = use end of the current calendar month instead. Days that don't
+    /// exist in a given month (e.g. 31 in February) roll to the last day.
+    var paydayDayOfMonth: Int?
+
     var createdAt: Date = Date()
 
     init(

@@ -305,6 +305,15 @@ struct ExpenseEditorView: View {
                         Button("Delete Expense", role: .destructive) {
                             showDeleteConfirm = true
                         }
+                        .popover(isPresented: $showDeleteConfirm) {
+                            DeleteConfirmPopover(
+                                title: "Delete this expense?",
+                                message: "This can't be undone.",
+                                onDelete: deleteExpense,
+                                onCancel: { showDeleteConfirm = false }
+                            )
+                            .presentationCompactAdaptation(.popover)
+                        }
                     }
                 }
             }
@@ -336,14 +345,6 @@ struct ExpenseEditorView: View {
                     hasManuallyChosenReturnAccount = false
                     returnLegs.removeAll()
                 }
-            }
-            .confirmationDialog(
-                "Delete this expense?",
-                isPresented: $showDeleteConfirm,
-                titleVisibility: .visible
-            ) {
-                Button("Delete", role: .destructive, action: deleteExpense)
-                Button("Cancel", role: .cancel) {}
             }
             .sheet(isPresented: $showingTagPicker) {
                 TagPickerSheet(selectedIDs: $selectedTagIDs)
@@ -638,7 +639,13 @@ struct ExpenseEditorView: View {
         try? context.save()
         WidgetRefresh.bump()
         BudgetNotificationService.checkAndNotify(in: context)
-        dismiss()
+
+        // Close the popover first, then dismiss on the next runloop tick.
+        // Dismissing synchronously while the popover is tearing down causes
+        // SwiftUI to drop the dismiss action, which is why the user previously
+        // had to also tap "Save" to actually leave the editor.
+        showDeleteConfirm = false
+        DispatchQueue.main.async { dismiss() }
     }
 }
 

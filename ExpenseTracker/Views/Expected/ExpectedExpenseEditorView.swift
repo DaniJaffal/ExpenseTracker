@@ -126,7 +126,10 @@ struct ExpectedExpenseEditorView: View {
         let cat = categories.first { $0.id == categoryID }
 
         let target: ExpectedExpense
+        let shouldLogPayment: Bool
+
         if let it = item {
+            let crossedToPaid = isPaid && !it.isPaid
             it.name = trimmed
             it.amount = amount
             it.currency = currency
@@ -134,12 +137,19 @@ struct ExpectedExpenseEditorView: View {
             it.recurrence = recurrence
             it.account = acc
             it.category = cat
-            if isPaid && !it.isPaid { it.paidDate = Date() }
-            if !isPaid { it.paidDate = nil }
-            it.isPaid = isPaid
             it.notificationsEnabled = notificationsEnabled
             it.notificationLeadDays = notificationLeadDays
             it.note = note
+
+            if crossedToPaid {
+                // Defer paid/date handling to RecurringService so an Expense
+                // is created and recurrence rolls forward.
+                shouldLogPayment = true
+            } else {
+                if !isPaid { it.paidDate = nil }
+                it.isPaid = isPaid
+                shouldLogPayment = false
+            }
             target = it
         } else {
             let new = ExpectedExpense(
@@ -154,14 +164,22 @@ struct ExpectedExpenseEditorView: View {
                 account: acc,
                 category: cat
             )
-            new.isPaid = isPaid
-            if isPaid { new.paidDate = Date() }
             context.insert(new)
             target = new
+            shouldLogPayment = isPaid
         }
 
         try? context.save()
-        await NotificationService.shared.scheduleNotification(for: target)
+
+        if shouldLogPayment {
+            _ = RecurringService.markPaid(target, in: context)
+            WidgetRefresh.bump()
+        }
+
+        NotificationService.shared.cancelNotification(for: target)
+        if !target.isPaid {
+            await NotificationService.shared.scheduleNotification(for: target)
+        }
         dismiss()
     }
 

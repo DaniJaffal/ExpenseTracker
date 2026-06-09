@@ -36,6 +36,14 @@ struct SubscriptionsListView: View {
                             } label: {
                                 SubscriptionRow(subscription: sub)
                             }
+                            .swipeActions(edge: .leading) {
+                                Button {
+                                    Task { await chargeNow(sub) }
+                                } label: {
+                                    Label("Charge Now", systemImage: "creditcard.circle.fill")
+                                }
+                                .tint(.blue)
+                            }
                         }
                     }
                     if !inactive.isEmpty {
@@ -64,6 +72,12 @@ struct SubscriptionsListView: View {
         .sheet(isPresented: $showingAdd) {
             NavigationStack { SubscriptionEditorView(subscription: nil) }
         }
+    }
+
+    private func chargeNow(_ sub: Subscription) async {
+        _ = RecurringService.chargeNow(sub, in: context)
+        await NotificationService.shared.scheduleNotification(for: sub)
+        WidgetRefresh.bump()
     }
 }
 

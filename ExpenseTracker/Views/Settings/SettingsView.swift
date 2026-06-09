@@ -26,6 +26,9 @@ struct SettingsView: View {
     @State private var biometricKind: BiometricKind = .none
     @State private var lockError: String?
 
+    /// Local mirror of AppSettings.paydayDayOfMonth. nil = "End of month".
+    @State private var paydayDayLocal: Int? = nil
+
     private var settings: AppSettings? { settingsList.first }
 
     var body: some View {
@@ -54,6 +57,43 @@ struct SettingsView: View {
                         Text(acc.name).tag(Optional(acc.id))
                     }
                 }
+            }
+
+            Section {
+                Picker("Cutoff", selection: Binding(
+                    get: { paydayDayLocal != nil },
+                    set: { usePayday in
+                        // Default to the 1st when first enabling payday mode.
+                        paydayDayLocal = usePayday ? (paydayDayLocal ?? 1) : nil
+                        settings?.paydayDayOfMonth = paydayDayLocal
+                        try? context.save()
+                    }
+                )) {
+                    Text("End of month").tag(false)
+                    Text("Payday").tag(true)
+                }
+
+                if let day = paydayDayLocal {
+                    Stepper(
+                        "Payday: day \(day) of the month",
+                        value: Binding(
+                            get: { day },
+                            set: { newDay in
+                                let clamped = max(1, min(31, newDay))
+                                paydayDayLocal = clamped
+                                settings?.paydayDayOfMonth = clamped
+                                try? context.save()
+                            }
+                        ),
+                        in: 1...31
+                    )
+                }
+            } header: {
+                Text("Available balance")
+            } footer: {
+                Text(paydayDayLocal == nil
+                     ? "The dashboard's “available” line sums everything due before the end of the current calendar month."
+                     : "The dashboard's “available” line sums everything due before your next payday. Days that don't exist in a given month (e.g. 31 in February) roll to the last day.")
             }
 
             Section("Categories & tags") {
@@ -193,6 +233,7 @@ struct SettingsView: View {
         lockEnabledLocal = s.isLockEnabled
         lockTimeoutLocal = LockTimeoutOption.option(forStoredValue: s.lockTimeoutSeconds)
         biometricKind = BiometricAuthService.availableBiometric()
+        paydayDayLocal = s.paydayDayOfMonth
     }
 
     /// Verifies the user can actually authenticate before flipping the toggle ON,

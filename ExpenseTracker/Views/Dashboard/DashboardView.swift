@@ -67,17 +67,48 @@ struct DashboardView: View {
             }
     }
 
-    /// Last instant of the current calendar month.
-    private var endOfMonth: Date {
-        Calendar.current.dateInterval(of: .month, for: Date())?.end ?? Date()
+    /// End-of-period cutoff used by the "available balance" line.
+    /// • If the user set a payday day in Settings, this is the last instant of
+    ///   the day BEFORE the next occurrence of that day-of-month. (So on
+    ///   payday itself, the cutoff is "yesterday" and the line resets.)
+    /// • Otherwise, the last instant of the current calendar month.
+    private var availableCutoff: Date {
+        let cal = Calendar.current
+        let today = Date()
+        if let day = settings?.paydayDayOfMonth, (1...31).contains(day) {
+            var comps = DateComponents()
+            comps.day = day
+            // matchingPolicy: .nextTime gracefully clamps to the last day of
+            // months that don't contain the requested day (e.g. 31 → Feb 28).
+            let nextPayday = cal.nextDate(
+                after: today,
+                matching: comps,
+                matchingPolicy: .nextTimePreservingSmallerComponents
+            ) ?? today
+            let startOfPayday = cal.startOfDay(for: nextPayday)
+            // One second before the start of payday = end of the day before.
+            return startOfPayday.addingTimeInterval(-1)
+        }
+        return cal.dateInterval(of: .month, for: today)?.end ?? today
     }
 
-    /// Sum of forward-looking money that's already committed for the rest of
-    /// this month: unpaid expected expenses + subscriptions renewing on or
-    /// before month-end. Includes anything overdue but still unpaid.
-    private var committedThisMonth: Decimal {
+    /// Human label for `availableCutoff`, used in the dashboard summary.
+    /// "this month" in end-of-month mode; "before payday (Jun 28)" otherwise.
+    private var cutoffDescription: String {
+        if settings?.paydayDayOfMonth != nil {
+            // availableCutoff is the day before payday; show payday itself.
+            let payday = availableCutoff.addingTimeInterval(1)
+            return "before payday (\(Formatters.date(payday, style: .medium)))"
+        }
+        return "this month"
+    }
+
+    /// Sum of forward-looking money that's already committed before
+    /// `availableCutoff`: unpaid expected expenses + subscriptions renewing
+    /// on or before the cutoff. Includes anything overdue but still unpaid.
+    private var committedUntilCutoff: Decimal {
         var total: Decimal = 0
-        let cutoff = endOfMonth
+        let cutoff = availableCutoff
 
         for exp in expectedExpenses where exp.dueDate <= cutoff {
             total += CurrencyService.convert(
@@ -98,10 +129,10 @@ struct DashboardView: View {
         return total
     }
 
-    /// Total balance after subtracting what's already committed for the rest
-    /// of this calendar month. Can go negative when committed > balance.
+    /// Total balance after subtracting what's already committed before the
+    /// cutoff. Can go negative when committed > balance.
     private var availableBalance: Decimal {
-        totalBalance - committedThisMonth
+        totalBalance - committedUntilCutoff
     }
 
     private var recentExpenses: [Expense] {
@@ -263,9 +294,7 @@ struct DashboardView: View {
                 .foregroundStyle(.white)
                 .contentTransition(.numericText())
 
-            if committedThisMonth > 0 {
-                availableLine
-            }
+            availableLine
 
             HStack {
                 Label(Formatters.currency(monthSpend, in: displayCurrency),
@@ -292,28 +321,44 @@ struct DashboardView: View {
         .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 6)
     }
 
-    /// Sub-line under the total: "✨ $X available after $Y due this month".
-    /// Goes red when available is negative (committed exceeds balance).
+    /// Sub-line under the total. Three states:
+    ///   • Nothing due before cutoff → "✓ Nothing due <cutoffDescription>"
+    ///   • Committed > 0, balance covers it → "✨ $X available · $Y due <cutoffDescription>"
+    ///   • Committed > 0, balance does not cover it → red "⚠ $X short · $Y due <cutoffDescription>"
+    @ViewBuilder
     private var availableLine: some View {
-        let isShort = availableBalance < 0
-        return HStack(spacing: 6) {
-            Image(systemName: isShort ? "exclamationmark.triangle.fill" : "sparkles")
-                .font(.caption2)
-            Text(Formatters.currency(availableBalance, in: displayCurrency))
-                .font(.caption.weight(.bold).monospacedDigit())
-            Text(isShort ? "short" : "available")
-                .font(.caption)
-            Text("·")
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.5))
-            Text("\(Formatters.currency(committedThisMonth, in: displayCurrency)) due this month")
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.75))
+        if committedUntilCutoff <= 0 {
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.caption2)
+                Text("Nothing due \(cutoffDescription)")
+                    .font(.caption)
+            }
+            .foregroundStyle(.white.opacity(0.85))
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            .padding(.top, 2)
+        } else {
+            let isShort = availableBalance < 0
+            HStack(spacing: 6) {
+                Image(systemName: isShort ? "exclamationmark.triangle.fill" : "sparkles")
+                    .font(.caption2)
+                Text(Formatters.currency(availableBalance, in: displayCurrency))
+                    .font(.caption.weight(.bold).monospacedDigit())
+                Text(isShort ? "short" : "available")
+                    .font(.caption)
+                Text("·")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.5))
+                Text("\(Formatters.currency(committedUntilCutoff, in: displayCurrency)) due \(cutoffDescription)")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.75))
+            }
+            .foregroundStyle(isShort ? Color(hex: "#FFD7D7") : .white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            .padding(.top, 2)
         }
-        .foregroundStyle(isShort ? Color(hex: "#FFD7D7") : .white)
-        .lineLimit(1)
-        .minimumScaleFactor(0.6)
-        .padding(.top, 2)
     }
 
     private var accountsSection: some View {

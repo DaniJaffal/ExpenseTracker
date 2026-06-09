@@ -125,69 +125,137 @@ struct AccountBalanceWidgetView: View {
     }
 
     private var singleView: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        Group {
             if let item = entry.items.first {
-                HStack(spacing: 8) {
-                    iconBadge(symbol: item.iconName, color: Color(hex: item.colorHex))
-                    Text(item.name)
-                        .font(.caption.weight(.semibold))
+                let tint = Color(hex: item.colorHex)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .top) {
+                        Text(item.name)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary.opacity(0.85))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                        Spacer(minLength: 4)
+                        Text(item.currency.displayCode)
+                            .font(.system(size: 10, weight: .heavy, design: .rounded))
+                            .tracking(0.5)
+                            .foregroundStyle(.primary.opacity(0.9))
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
+                    }
+                    Spacer(minLength: 0)
+                    Text(Formatters.currency(item.balance, in: item.currency))
+                        .font(.system(size: 30, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.4)
+                    Text(item.typeName.uppercased())
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .tracking(0.6)
+                        .foregroundStyle(.primary.opacity(0.55))
                 }
-                Spacer(minLength: 0)
-                Text(Formatters.currency(item.balance, in: item.currency))
-                    .font(.system(size: 22, weight: .bold, design: .rounded).monospacedDigit())
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-                Text(item.typeName)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                .containerBackground(for: .widget) {
+                    LinearGradient(
+                        colors: [tint.opacity(0.30), tint.opacity(0.62)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                }
             } else {
                 emptyState
+                    .containerBackground(.background, for: .widget)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .containerBackground(.background, for: .widget)
     }
 
     private var gridView: some View {
-        let columns = family == .systemMedium
-            ? [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
-            : [GridItem(.flexible()), GridItem(.flexible())]
+        // Fixed-shape grid (columns × rows) so every cell ends up the same
+        // size regardless of how short or long its label is. We deliberately
+        // avoid LazyVGrid here — it sizes rows/cells to content and produces
+        // uneven tiles when balances have very different widths.
+        let columns = family == .systemMedium ? 3 : 2
+        let rows = family == .systemMedium ? 1 : 4 // systemLarge → up to 8 tiles
         return Group {
             if entry.items.isEmpty {
                 emptyState
             } else {
-                LazyVGrid(columns: columns, spacing: 10) {
-                    ForEach(entry.items) { item in
-                        accountTile(item)
+                VStack(spacing: 10) {
+                    ForEach(0..<rows, id: \.self) { row in
+                        HStack(spacing: 10) {
+                            ForEach(0..<columns, id: \.self) { col in
+                                let idx = row * columns + col
+                                if idx < entry.items.count {
+                                    accountTile(entry.items[idx])
+                                } else {
+                                    // Invisible spacer cell keeps the columns
+                                    // aligned when the final row is partially
+                                    // filled (e.g. 7 of 8 large-widget slots).
+                                    Color.clear
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
-                .padding(.vertical, 2)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .containerBackground(.background, for: .widget)
     }
 
     private func accountTile(_ item: AccountBalanceEntry.Item) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                iconBadge(symbol: item.iconName, color: Color(hex: item.colorHex), size: 22)
+        let tint = Color(hex: item.colorHex)
+        return VStack(alignment: .leading, spacing: 2) {
+            // Top row: account name on the left, currency pill on the right.
+            HStack(alignment: .top, spacing: 4) {
+                Text(item.name)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary.opacity(0.85))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Spacer(minLength: 4)
                 Text(item.currency.displayCode)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 9, weight: .heavy, design: .rounded))
+                    .tracking(0.4)
+                    .foregroundStyle(.primary.opacity(0.9))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(.ultraThinMaterial)
+                    )
             }
-            Text(item.name)
-                .font(.caption.weight(.semibold))
-                .lineLimit(1)
+
+            Spacer(minLength: 2)
+
+            // Hero: the balance.
             Text(Formatters.currency(item.balance, in: item.currency))
-                .font(.subheadline.weight(.bold).monospacedDigit())
+                .font(.system(size: 18, weight: .bold, design: .rounded).monospacedDigit())
+                .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
         }
-        .padding(8)
-        .background(Color.secondary.opacity(0.10))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        // Fill the cell — without this the background tracks the content's
+        // intrinsic width, so a "$327.38" tile ends up visibly narrower than
+        // a "ل.ل 8,000,000" tile in the same row.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(
+            LinearGradient(
+                colors: [tint.opacity(0.28), tint.opacity(0.58)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .overlay(
+            // Thin inner border for definition on busy wallpapers.
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(.white.opacity(0.10), lineWidth: 0.5)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var emptyState: some View {
@@ -203,16 +271,6 @@ struct AccountBalanceWidgetView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func iconBadge(symbol: String, color: Color, size: CGFloat = 26) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-                .fill(color.opacity(0.18))
-            Image(systemName: symbol)
-                .font(.system(size: size * 0.48, weight: .semibold))
-                .foregroundStyle(color)
-        }
-        .frame(width: size, height: size)
-    }
 }
 
 // MARK: - Widget

@@ -38,10 +38,7 @@ struct ExpectedExpensesListView: View {
                             }
                             .swipeActions(edge: .leading) {
                                 Button {
-                                    item.isPaid = true
-                                    item.paidDate = Date()
-                                    try? context.save()
-                                    NotificationService.shared.cancelNotification(for: item)
+                                    Task { await markPaid(item) }
                                 } label: {
                                     Label("Mark Paid", systemImage: "checkmark.circle.fill")
                                 }
@@ -74,6 +71,17 @@ struct ExpectedExpensesListView: View {
         .sheet(isPresented: $showingAdd) {
             NavigationStack { ExpectedExpenseEditorView(item: nil) }
         }
+    }
+
+    private func markPaid(_ item: ExpectedExpense) async {
+        _ = RecurringService.markPaid(item, in: context)
+        // Cancel the existing notification — if the row rolled forward to a new
+        // dueDate we reschedule for the next occurrence.
+        NotificationService.shared.cancelNotification(for: item)
+        if !item.isPaid {
+            await NotificationService.shared.scheduleNotification(for: item)
+        }
+        WidgetRefresh.bump()
     }
 }
 

@@ -26,7 +26,19 @@ struct ExpenseTrackerApp: App {
         WindowGroup {
             RootView()
                 .task {
-                    SeedService.bootstrap(in: modelContainer.mainContext)
+                    let context = modelContainer.mainContext
+                    SeedService.bootstrap(in: context)
+
+                    // Catch up any subscription renewals that came due while the
+                    // app wasn't running. Each charged sub gets its notification
+                    // re-armed for the new nextRenewalDate.
+                    let charged = RecurringService.processDueSubscriptions(in: context)
+                    for sub in charged {
+                        await NotificationService.shared.scheduleNotification(for: sub)
+                    }
+                    if !charged.isEmpty {
+                        WidgetRefresh.bump()
+                    }
                 }
         }
         .modelContainer(modelContainer)
